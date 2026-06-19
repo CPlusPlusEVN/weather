@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conditions — a small weather readout</title>
+  <meta name="description" content="Look up the current weather for any city." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    :root {
+      --bg: #e7ecef;
+      --card: #ffffff;
+      --ink: #18222e;
+      --muted: #61707f;
+      --line: #d6dee4;
+      --line-strong: #b9c4cd;
+      --accent: #cf5a2c;       /* warm sun, used sparingly */
+      --accent-ink: #8f3a17;
+      --focus: #2a6f97;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(120% 90% at 50% -10%, #f3f6f8 0%, var(--bg) 55%) fixed;
+      display: grid;
+      place-items: start center;
+      padding: clamp(1.5rem, 5vw, 5rem) 1.25rem 4rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    main {
+      width: 100%;
+      max-width: 30rem;
+    }
+
+    .masthead {
+      margin-bottom: 1.75rem;
+    }
+    .eyebrow {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 0.4rem;
+    }
+    h1 {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 600;
+      font-size: clamp(2rem, 7vw, 2.75rem);
+      line-height: 1.05;
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+
+    /* ---- search ---- */
+    .search {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .search input {
+      flex: 1;
+      min-width: 0;
+      font: inherit;
+      padding: 0.75rem 0.9rem;
+      color: var(--ink);
+      background: var(--card);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .search input::placeholder { color: #9aa7b2; }
+    .search input:focus-visible {
+      outline: none;
+      border-color: var(--focus);
+      box-shadow: 0 0 0 3px rgba(42, 111, 151, 0.18);
+    }
+    .search button {
+      font: inherit;
+      font-weight: 600;
+      white-space: nowrap;
+      padding: 0.75rem 1.1rem;
+      color: #fff;
+      background: var(--accent);
+      border: 1px solid var(--accent-ink);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s;
+    }
+    .search button:hover { background: #bd4f24; }
+    .search button:active { transform: translateY(1px); }
+    .search button:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(207, 90, 44, 0.3);
+    }
+    .search button[aria-busy="true"] {
+      background: #b6837a;
+      border-color: #b6837a;
+      cursor: progress;
+    }
+
+    /* ---- status line (errors + loading) ---- */
+    .status {
+      min-height: 1.25rem;
+      font-size: 0.9rem;
+      margin: 0 0 1rem;
+    }
+    .status[data-kind="error"] { color: var(--accent-ink); }
+    .status[data-kind="info"] { color: var(--muted); }
+
+    /* ---- result card ---- */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1.5rem 1.5rem 1.25rem;
+      box-shadow: 0 1px 2px rgba(24, 34, 46, 0.04),
+        0 12px 30px -18px rgba(24, 34, 46, 0.25);
+    }
+    .card[hidden] { display: none; }
+
+    .place {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 0.75rem;
+    }
+
+    .reading {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .temp {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 600;
+      font-size: clamp(3.5rem, 16vw, 4.75rem);
+      line-height: 0.9;
+      letter-spacing: -0.02em;
+    }
+    .temp span { font-size: 0.4em; color: var(--muted); }
+    .glyph { margin-left: auto; text-align: right; }
+    .glyph img { width: 64px; height: 64px; display: block; margin-left: auto; }
+    .condition {
+      font-size: 0.95rem;
+      color: var(--ink);
+      margin-top: 0.25rem;
+    }
+    .temp-f {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 0.6rem 0 0;
+    }
+
+    /* instrument readouts */
+    .gauges {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+    }
+    .gauge { padding-right: 1rem; }
+    .gauge + .gauge { padding-left: 1rem; border-left: 1px solid var(--line); }
+    .gauge .label {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 0.3rem;
+    }
+    .gauge .value {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 1.5rem;
+      font-weight: 500;
+    }
+    .gauge .value small { font-size: 0.55em; color: var(--muted); font-weight: 400; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <header class="masthead">
+      <p class="eyebrow">Current conditions</p>
+      <h1>What's it doing<br />out there?</h1>
+    </header>
+
+    <div class="search" role="search">
+      <input
+        id="city"
+        type="text"
+        name="city"
+        placeholder="Search a city — e.g. Lisbon"
+        autocomplete="off"
+        autocapitalize="words"
+        spellcheck="false"
+        aria-label="City name"
+      />
+      <button id="go" type="button">Get weather</button>
+    </div>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <section id="card" class="card" hidden aria-live="polite">
+      <p class="place" id="place"></p>
+      <div class="reading">
+        <div>
+          <div class="temp" id="temp"></div>
+          <p class="condition" id="condition"></p>
+        </div>
+        <div class="glyph">
+          <img id="icon" alt="" width="64" height="64" />
+        </div>
+      </div>
+      <p class="temp-f" id="tempf"></p>
+
+      <div class="gauges">
+        <div class="gauge">
+          <p class="label">Humidity</p>
+          <p class="value" id="humidity"></p>
+        </div>
+        <div class="gauge">
+          <p class="label">Wind</p>
+          <p class="value" id="wind"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const els = {
+      input: document.getElementById("city"),
+      button: document.getElementById("go"),
+      status: document.getElementById("status"),
+      card: document.getElementById("card"),
+      place: document.getElementById("place"),
+      temp: document.getElementById("temp"),
+      tempf: document.getElementById("tempf"),
+      condition: document.getElementById("condition"),
+      icon: document.getElementById("icon"),
+      humidity: document.getElementById("humidity"),
+      wind: document.getElementById("wind"),
+    };
+
+    function setStatus(message, kind) {
+      els.status.textContent = message || "";
+      if (kind) els.status.dataset.kind = kind;
+      else delete els.status.dataset.kind;
+    }
+
+    function setLoading(isLoading) {
+      els.button.setAttribute("aria-busy", String(isLoading));
+      els.button.textContent = isLoading ? "Checking…" : "Get weather";
+      els.button.disabled = isLoading;
+      els.input.disabled = isLoading;
+    }
+
+    function render(data) {
+      const where = [data.city, data.region, data.country]
+        .filter(Boolean)
+        .join(" · ");
+      els.place.textContent = where;
+      els.temp.innerHTML = `${Math.round(data.temp_c)}<span>°C</span>`;
+      els.tempf.textContent =
+        data.temp_f != null ? `${Math.round(data.temp_f)} °F` : "";
+      els.condition.textContent = data.condition || "";
+
+      if (data.icon) {
+        els.icon.src = data.icon;
+        els.icon.alt = data.condition || "Current condition";
+        els.icon.style.display = "block";
+      } else {
+        els.icon.removeAttribute("src");
+        els.icon.alt = "";
+        els.icon.style.display = "none";
+      }
+
+      els.humidity.innerHTML =
+        data.humidity != null ? `${data.humidity}<small>%</small>` : "—";
+      els.wind.innerHTML =
+        data.wind_kph != null
+          ? `${Math.round(data.wind_kph)}<small> km/h</small>`
+          : "—";
+
+      els.card.hidden = false;
+    }
+
+    async function getWeather() {
+      const city = els.input.value.trim();
+
+      if (!city) {
+        els.card.hidden = true;
+        setStatus("Type a city name first.", "error");
+        els.input.focus();
+        return;
+      }
+
+      setLoading(true);
+      setStatus("Fetching the latest reading…", "info");
+
+      try {
+        const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+        let body = {};
+        try { body = await res.json(); } catch { /* non-JSON body */ }
+
+        if (!res.ok) {
+          // The backend sends a friendly { error } for every failure case.
+          setStatus(
+            body.error || "Something went wrong. Please try again.",
+            "error"
+          );
+          els.card.hidden = true;
+          return;
+        }
+
+        render(body);
+        setStatus("", null);
+      } catch (err) {
+        // Client lost the network, or the request was blocked.
+        setStatus(
+          "Can't reach the server. Check your connection and try again.",
+          "error"
+        );
+        els.card.hidden = true;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    els.button.addEventListener("click", getWeather);
+    els.input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") getWeather();
+    });
+    els.input.focus();
+  </script>
+</body>
+</html>

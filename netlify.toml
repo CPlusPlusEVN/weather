@@ -1,0 +1,18 @@
+# netlify.toml
+
+[build]
+  # Static frontend lives here. No build step needed for vanilla JS.
+  publish = "public"
+  functions = "netlify/functions"
+
+# Pretty URL: the browser calls /api/weather?city=... and Netlify routes it
+# to the serverless function. status = 200 makes it a rewrite (proxy), not a
+# visible redirect, so the key never leaves the server.
+[[redirects]]
+  from = "/api/weather"
+  to = "/.netlify/functions/weather"
+  status = 200
+
+[functions]
+  # Modern Node runtime with global fetch available.
+  node_bundler = "esbuild"
